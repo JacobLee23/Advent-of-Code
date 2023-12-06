@@ -2,10 +2,12 @@
 """
 
 import argparse
+import importlib
 import logging
 import os
 import pathlib
 import shutil
+import typing
 
 
 LOGGER = logging.getLogger(__name__)
@@ -41,8 +43,7 @@ class AdventOfCode:
 
         parser_solve = subparsers.add_parser("solve", aliases=["s"])
         parser_solve.add_argument("year", type=int)
-        parser_solve.add_argument("-p", "--part", type=int, choices=[1, 2])
-        parser_solve.add_argument("-t", "--test", action="store_true")
+        parser_solve.add_argument("day", type=int)
         parser_solve.set_defaults(func=self.solve)
 
         if not self.events.exists():
@@ -50,39 +51,43 @@ class AdventOfCode:
 
         self.arguments = self.parser.parse_args()
 
+        self.directory = self.events / f"aoc{self.arguments.year}"
+
     def init(self, args: argparse.Namespace) -> pathlib.Path:
         """
         :param args:
         :raise FileExistsError:
         """
-        directory = self.events / str(args.year)
-        if directory.exists():
+        if self.directory.exists():
             LOGGER.debug(
-                "Directory already exists (force=%s): %s", self.arguments.force, directory
+                "Directory already exists (force=%s): %s", self.arguments.force, self.directory
             )
 
             if args.force:
-                shutil.rmtree(directory)
-                LOGGER.debug("Removed directory and children: %s", directory)
+                shutil.rmtree(self.directory)
+                LOGGER.debug("Removed directory and children: %s", self.directory)
             else:
-                raise FileExistsError(directory)
+                raise FileExistsError(self.directory)
 
-        os.mkdir(directory)
-        LOGGER.debug("Created directory: %s", directory)
+        os.mkdir(self.directory)
+        LOGGER.debug("Created directory: %s", self.directory)
 
         for day in range(1, 26):
-            subdirectory = directory / str(day).zfill(2)
+            subdirectory = self.directory / f"day{str(day).zfill(2)}"
             os.mkdir(subdirectory)
 
             for file in os.listdir(self.template):
-                shutil.copy(self.template / file, subdirectory / file)
+                shutil.copyfile(self.template / file, subdirectory / file)
 
-            with open(subdirectory / "solution.py", "w+", encoding="utf-8") as file:
-                file.write(file.read().format(year=args.year, day=day))
+            with open(subdirectory / "solution.py", "r", encoding="utf-8") as file:
+                formatted = file.read().format(year=args.year, day=day)
+
+            with open(subdirectory / "solution.py", "w", encoding="utf-8") as file:
+                file.write(formatted)
 
             LOGGER.debug("Copied directory: %s -> %s", self.template, subdirectory)
 
-        return directory
+        return self.directory
 
     def remove(self, args: argparse.Namespace) -> pathlib.Path:
         """
@@ -90,20 +95,79 @@ class AdventOfCode:
         :return:
         :raise FileNotFoundError:
         """
-        directory = self.events / str(args.year)
-        if not directory.exists():
-            LOGGER.debug("Directory already exists: %s", directory)
-            raise FileNotFoundError(directory)
+        if not self.directory.exists():
+            LOGGER.debug("Directory already exists: %s", self.directory)
+            raise FileNotFoundError(self.directory)
 
-        shutil.rmtree(directory)
-        LOGGER.debug("Removed directory: %s", directory)
+        shutil.rmtree(self.directory)
+        LOGGER.debug("Removed directory: %s", self.directory)
 
-        return directory
+        return self.directory
     
     def solve(self, args: argparse.Namespace) -> None:
         """
         :param args:
         """
+        return Solver(self.directory / f"day{str(args.day).zfill(2)}")
+
+
+class Solver:
+    """
+    :param directory:
+    """
+    def __init__(self, directory: pathlib.Path):
+        self.directory = directory
+        self.module = importlib.import_module(
+            ".".join(os.path.normpath(directory / "solution").split(os.sep))
+        )
+
+    def result(self, part: int, test: bool) -> typing.Any:
+        """
+        :aram part:
+        :param test:
+        :return:
+        """
+        with open(
+            self.directory / (f"testin{part}.txt" if test else "in.txt"), "r", encoding="utf-8"
+        ) as file:
+            if part == 1:
+                return self.module.part1(file.read())
+            elif part == 2:
+                return self.module.part2(file.read())
+            else:
+                raise ValueError(part)
+            
+    def expected(self, part: int) -> str:
+        """
+        :param part:
+        :return:
+        """
+        with open(self.directory / f"testout{part}.txt", "r", encoding="utf-8") as file:
+            return file.read()
+        
+    def check(self, part: int) -> typing.Optional[typing.Tuple[bool, typing.Any, typing.Any]]:
+        """
+        :param part:
+        :return:
+        """
+        result = self.result(part, True)
+        try:
+            expected = type(result)(self.expected(part))
+        except TypeError:
+            return None
+
+        return result == expected, result, expected
+    
+    def solve(self, part: int) -> typing.Any:
+        """
+        :param part:
+        :return:
+        """
+        result = self.result(part, False)
+        with open(self.directory / f"out{part}.txt", "w", encoding="utf-8") as file:
+            file.write(str(result))
+
+        return result
 
 
 def main():
@@ -116,10 +180,16 @@ def main():
     else:
         LOGGER.setLevel(logging.DEBUG)
 
-    result = aoc.arguments.func(aoc.arguments)
-    if aoc.arguments.name == "init":
-        LOGGER.info("Initialized: %s", result)
-    elif aoc.arguments.name == "remove":
-        LOGGER.info("Removed: %s", result)
-    elif aoc.arguments.name == "solve":
-        LOGGER.info(result)
+    LOGGER.info(aoc.arguments.__dict__)
+    if aoc.arguments.name in ("init", "i"):
+        directory: pathlib.Path = aoc.arguments.func(aoc.arguments)
+        LOGGER.info("Initialized: %s", directory)
+    elif aoc.arguments.name in ("remove", "rm"):
+        directory: pathlib.Path = aoc.arguments.func(aoc.arguments)
+        LOGGER.info("Removed: %s", directory)
+    elif aoc.arguments.name in ("solve", "s"):
+        solver: Solver = aoc.arguments.func(aoc.arguments)
+        for n in (1, 2):
+            test, solve = solver.check(n), solver.solve(n)
+            LOGGER.info(f"Part {n}:\n\tTest:\t{test}\n\tSolve:\t{solve}")
+        LOGGER.info("Solved: %s", solver.directory)
