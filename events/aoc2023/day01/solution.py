@@ -6,19 +6,6 @@ import re
 import typing
 
 
-DIGITS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-}
-
-
 def normalize_str(string: str, *, reverse: bool = False) -> str:
     """
     :param string:
@@ -29,9 +16,7 @@ def normalize_str(string: str, *, reverse: bool = False) -> str:
     if reverse:
         digits, string = [s[::-1] for s in digits], string[::-1]
 
-    return re.sub(
-        f"({'|'.join(digits)})", lambda m: str(digits.index(m.group()) + 1), string
-    )
+    return re.sub(f"({'|'.join(digits)})", lambda m: str(digits.index(m.group()) + 1), string)
 
 
 def part1(input: str) -> int:
