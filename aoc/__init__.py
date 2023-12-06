@@ -36,9 +36,9 @@ class AdventOfCode:
         parser_init.add_argument("-f", "--force", action="store_true")
         parser_init.set_defaults(func=self.init)
 
-        parser_init = subparsers.add_parser("remove", aliases=["rm"])
-        parser_init.add_argument("year", type=int)
-        parser_init.set_defaults(func=self.remove)
+        paser_remove = subparsers.add_parser("remove", aliases=["rm"])
+        paser_remove.add_argument("year", type=int)
+        paser_remove.set_defaults(func=self.remove)
 
         if not self.events.exists():
             os.mkdir(self.events)
