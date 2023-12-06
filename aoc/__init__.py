@@ -32,16 +32,20 @@ class AdventOfCode:
 
         subparsers = self.parser.add_subparsers(dest="name")
 
-        parser_init = subparsers.add_parser("init", aliases=["i"])
+        parser_init = subparsers.add_parser("init")
         parser_init.add_argument("year", type=int)
         parser_init.add_argument("-f", "--force", action="store_true")
         parser_init.set_defaults(func=self.init)
 
-        paser_remove = subparsers.add_parser("remove", aliases=["rm"])
-        paser_remove.add_argument("year", type=int)
-        paser_remove.set_defaults(func=self.remove)
+        parser_remove = subparsers.add_parser("remove")
+        parser_remove.add_argument("year", type=int)
+        parser_remove.set_defaults(func=self.remove)
 
-        parser_solve = subparsers.add_parser("solve", aliases=["s"])
+        parser_repair = subparsers.add_parser("repair")
+        parser_repair.add_argument("year", type=int)
+        parser_repair.set_defaults(func=self.repair)
+
+        parser_solve = subparsers.add_parser("solve")
         parser_solve.add_argument("year", type=int)
         parser_solve.add_argument("day", type=int)
         parser_solve.set_defaults(func=self.solve)
@@ -75,32 +79,67 @@ class AdventOfCode:
         for day in range(1, 26):
             subdirectory = self.directory / f"day{str(day).zfill(2)}"
             os.mkdir(subdirectory)
+            LOGGER.debug("Created directory: %s", subdirectory)
 
             for file in os.listdir(self.template):
                 shutil.copyfile(self.template / file, subdirectory / file)
+                LOGGER.debug("Copied file: %s -> %s", self.template / file, subdirectory / file)
 
             with open(subdirectory / "solution.py", "r", encoding="utf-8") as file:
                 formatted = file.read().format(year=args.year, day=day)
+                LOGGER.debug("Read .py file: %s", subdirectory / "solution.py")
 
             with open(subdirectory / "solution.py", "w", encoding="utf-8") as file:
                 file.write(formatted)
+                LOGGER.debug("Formatted .py file: %s", subdirectory / "solution.py")
 
             LOGGER.debug("Copied directory: %s -> %s", self.template, subdirectory)
 
         return self.directory
 
-    def remove(self, args: argparse.Namespace) -> pathlib.Path:
+    def remove(self) -> pathlib.Path:
         """
         :param args:
         :return:
         :raise FileNotFoundError:
         """
         if not self.directory.exists():
-            LOGGER.debug("Directory already exists: %s", self.directory)
+            LOGGER.debug("Directory does not exist: %s", self.directory)
             raise FileNotFoundError(self.directory)
 
         shutil.rmtree(self.directory)
         LOGGER.debug("Removed directory: %s", self.directory)
+
+        return self.directory
+    
+    def repair(self) -> pathlib.Path:
+        """
+        :param args:
+        :return:
+        :raise FileNotFoundError:
+        """
+        if not self.directory.exists():
+            LOGGER.debug("Directory does not exist: %s", self.directory)
+            raise FileNotFoundError(self.directory)
+        
+        for day in range(1, 26):
+            subdirectory = self.directory / f"day{str(day).zfill(2)}"
+            if not subdirectory.exists():
+                LOGGER.debug("Directory does not exist: %s", subdirectory)
+                os.mkdir(subdirectory)
+                LOGGER.debug("Created directory: %s", subdirectory)
+
+            for file in os.listdir(self.template):
+                if not (subdirectory / file).exists():
+                    LOGGER.debug("File does not exist: %s", subdirectory / file)
+                    shutil.copyfile(self.template / file, subdirectory / file)
+                    LOGGER.debug("Copied file: %s -> %s", self.template / file, subdirectory / file)
+
+            for file in os.listdir(subdirectory):
+                if not (self.template / file).exists():
+                    LOGGER.debug("Unknown file discovered: %s", subdirectory / file)
+                    os.remove(subdirectory / file)
+                    LOGGER.debug("Removed file: %s", subdirectory / file)
 
         return self.directory
     
@@ -181,13 +220,16 @@ def main():
         LOGGER.setLevel(logging.DEBUG)
 
     LOGGER.info(aoc.arguments.__dict__)
-    if aoc.arguments.name in ("init", "i"):
+    if aoc.arguments.name == "init":
         directory: pathlib.Path = aoc.arguments.func(aoc.arguments)
         LOGGER.info("Initialized: %s", directory)
-    elif aoc.arguments.name in ("remove", "rm"):
-        directory: pathlib.Path = aoc.arguments.func(aoc.arguments)
+    elif aoc.arguments.name == "remove":
+        directory: pathlib.Path = aoc.arguments.func()
         LOGGER.info("Removed: %s", directory)
-    elif aoc.arguments.name in ("solve", "s"):
+    elif aoc.arguments.name == "repair":
+        directory: pathlib.Path = aoc.arguments.func()
+        LOGGER.info("Repaired: %s", directory)
+    elif aoc.arguments.name == "solve":
         solver: Solver = aoc.arguments.func(aoc.arguments)
         for n in (1, 2):
             test, solve = solver.check(n), solver.solve(n)
