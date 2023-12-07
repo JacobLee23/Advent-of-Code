@@ -48,6 +48,7 @@ class AdventOfCode:
         parser_solve = subparsers.add_parser("solve")
         parser_solve.add_argument("year", type=int)
         parser_solve.add_argument("day", type=int)
+        parser_solve.add_argument("-t", "--test", action="store_true")
         parser_solve.set_defaults(func=self.solve)
 
         if not self.events.exists():
@@ -232,6 +233,9 @@ def main():
     elif aoc.arguments.name == "solve":
         solver: Solver = aoc.arguments.func(aoc.arguments)
         for n in (1, 2):
-            test, solve = solver.check(n), solver.solve(n)
+            if aoc.arguments.test:
+                test, solve = solver.check(n), None
+            else:
+                test, solve = solver.check(n), solver.solve(n)
             LOGGER.info(f"Part {n}:\n\tTest:\t{test}\n\tSolve:\t{solve}")
         LOGGER.info("Solved: %s", solver.directory)
